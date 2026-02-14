@@ -2,26 +2,27 @@
 import PackageDescription
 
 let package = Package(
-    name: "TRex",
+    name: "iTMUX",
     platforms: [
         .iOS(.v17),
         .macOS(.v14)
     ],
     products: [
         .library(
-            name: "TRex",
-            targets: ["TRex"]),
+            name: "iTMUX",
+            targets: ["iTMUX"]),
     ],
     dependencies: [
-        // SSH library - you may need to swap this for NMSSH if it works better
-        .package(url: "https://github.com/Frugghi/SwiftSSH.git", from: "1.0.0"),
+        .package(url: "https://github.com/Frugghi/NMSSH.git", from: "1.0.0"),
     ],
     targets: [
         .target(
-            name: "TRex",
-            dependencies: ["SwiftSSH"]),
-        .testTarget(
-            name: "TRexTests",
-            dependencies: ["TRex"]),
+            name: "iTMUX",
+            dependencies: [
+                // Link against NMSSH product provided by the dependency
+                .product(name: "NMSSH", package: "NMSSH")
+            ],
+            path: "Sources"
+        )
     ]
 )
