@@ -366,9 +366,14 @@ struct TerminalView: NSViewRepresentable {
             )
         ]
         
-        attributes[.foregroundColor] = style.reverse ? nsColor(style.background) : nsColor(style.foreground)
+        let foregroundColor = style.reverse
+            ? nsColor(style.background, isBackground: false)
+            : nsColor(style.foreground, isBackground: false)
+        attributes[.foregroundColor] = foregroundColor
         
-        let bgColor = style.reverse ? nsColor(style.foreground) : nsColor(style.background)
+        let bgColor = style.reverse
+            ? nsColor(style.foreground, isBackground: true)
+            : nsColor(style.background, isBackground: true)
         if bgColor != .clear {
             attributes[.backgroundColor] = bgColor
         }
@@ -376,9 +381,9 @@ struct TerminalView: NSViewRepresentable {
         return NSAttributedString(string: text, attributes: attributes)
     }
     
-    private func nsColor(_ color: TerminalRenderer.ANSIColor) -> NSColor {
+    private func nsColor(_ color: TerminalRenderer.ANSIColor, isBackground: Bool) -> NSColor {
         switch color {
-        case .default: return .white
+        case .default: return isBackground ? .clear : .white
         case .black: return .black
         case .red: return .red
         case .green: return .green

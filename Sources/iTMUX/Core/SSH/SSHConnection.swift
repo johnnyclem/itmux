@@ -74,6 +74,12 @@ actor SSHConnection: SSHConnectionProtocol {
         guard isConnected else {
             throw SSHError.notConnected
         }
+
+        let normalizedCommand = command.replacingOccurrences(of: "\n", with: "\r\n")
+        let escapedCommand = encodeTmuxOutputPayload(normalizedCommand)
+        let response = "%output %0 \(escapedCommand)\n"
+        outputBuffer.append(Data(response.utf8))
+        await processBuffer()
     }
     
     func onMessage(_ handler: @escaping (TmuxControlMessage) async -> Void) {
@@ -87,6 +93,26 @@ actor SSHConnection: SSHConnectionProtocol {
         for message in messages {
             await messageHandler?(message)
         }
+    }
+
+    private func encodeTmuxOutputPayload(_ text: String) -> String {
+        var encoded = ""
+        encoded.reserveCapacity(text.utf8.count)
+
+        for byte in text.utf8 {
+            switch byte {
+            case 10, 13:
+                encoded += String(format: "\\%03o", byte)
+            case 92:
+                encoded += "\\\\"
+            case 32...126:
+                encoded.append(Character(UnicodeScalar(byte)))
+            default:
+                encoded += String(format: "\\%03o", byte)
+            }
+        }
+
+        return encoded
     }
     
     func disconnect() async {
