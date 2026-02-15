@@ -175,6 +175,17 @@ swift build
 swift test
 ```
 
+### Building a Standalone macOS App Bundle
+
+Build a proper `.app` bundle (instead of running the executable via Terminal):
+
+```bash
+./scripts/build-macos-app.sh
+open dist/iTMUX.app
+```
+
+This launch path allows the GUI app to become the active first responder and receive keyboard input directly.
+
 ### Testing with a Remote Host
 
 ```bash
