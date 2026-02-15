@@ -3,41 +3,54 @@ import SwiftUI
 struct TerminalSessionView: View {
     let host: RemoteHost
     @ObservedObject var manager: ConnectionManager
-    
+
     @State private var commandInput = ""
     @State private var suggestions: [String] = []
+    @State private var commandHistory: [String] = []
     @State private var showKeyboardBar = true
     @State private var modifierState: Set<KeyModifier> = []
     @FocusState private var isInputFocused: Bool
-    
+
+    private let quickMacros = ["ls -la", "git status", "tmux ls", "clear", "pwd"]
+
     private var panes: [PaneState] {
         manager.getPanes(for: host.id)
     }
-    
+
     private var activePane: PaneState? {
         panes.first { $0.isActive } ?? panes.first
     }
-    
+
+    private var accent: Color {
+        host.colorScheme.liquidAccent
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             if let pane = activePane {
                 terminalContainerView(pane: pane)
             } else {
                 loadingView
             }
-            
+
+            macroToolbar
+
             if !suggestions.isEmpty {
                 autocompleteToolbar
             }
-            
+
+            if !commandHistory.isEmpty && commandInput.isEmpty {
+                historyToolbar
+            }
+
             if showKeyboardBar {
                 customKeyboardBar
             }
-            
+
             commandInputView
         }
-        .animation(.spring(response: 0.25), value: suggestions)
-        .animation(.spring(response: 0.25), value: showKeyboardBar)
+        .animation(.spring(response: 0.24, dampingFraction: 0.9), value: suggestions)
+        .animation(.spring(response: 0.24, dampingFraction: 0.9), value: showKeyboardBar)
         .onChange(of: commandInput) { _, newValue in
             updateSuggestions(for: newValue)
         }
@@ -45,63 +58,86 @@ struct TerminalSessionView: View {
             isInputFocused = true
         }
     }
-    
+
     private func terminalContainerView(pane: PaneState) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 8, height: 8)
-                
-                Text(host.displayName)
-                    .font(.caption.bold())
-                    .foregroundColor(.white)
-                
-                Spacer()
-                
-                Text(pane.workingDirectory)
-                    .font(.caption2)
-                    .foregroundColor(.gray)
-                
-                if !pane.title.isEmpty {
-                    Text("•")
-                        .foregroundColor(.gray)
-                    Text(pane.title)
-                        .font(.caption2)
-                        .foregroundColor(.gray)
+        NeoGlassCard(accent: accent, cornerRadius: 22, padding: 0) {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    NeoRoboGlyph(symbol: host.colorScheme.glyphSymbol, accent: accent, size: 30)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(host.displayName)
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(NeoLiquidPalette.textPrimary)
+                        Text(pane.workingDirectory)
+                            .font(.caption2.monospaced())
+                            .foregroundColor(NeoLiquidPalette.textSecondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    if !pane.title.isEmpty {
+                        NeoTagPill(text: pane.title, icon: "rectangle.3.group", accent: accent.opacity(0.8))
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+
+                TerminalView(
+                    paneId: pane.id,
+                    colorScheme: host.colorScheme,
+                    renderer: pane.renderer
+                )
+                .frame(maxWidth: .infinity, minHeight: 280)
+                .background(Color.black.opacity(0.88))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(10)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+    }
+
+    private var loadingView: some View {
+        NeoGlassCard(accent: accent, cornerRadius: 22, padding: 20) {
+            VStack(spacing: 14) {
+                ProgressView()
+                    .tint(accent)
+                    .scaleEffect(1.15)
+                Text("Initializing terminal consciousness...")
+                    .font(.footnote)
+                    .foregroundColor(NeoLiquidPalette.textSecondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 260)
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private var macroToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(quickMacros, id: \.self) { macro in
+                    Button {
+                        runMacro(macro)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: iconFor(macro))
+                                .font(.caption2)
+                            Text(macro)
+                                .font(.caption.monospaced())
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                    }
+                    .buttonStyle(NeoLiquidButtonStyle(tint: accent, prominent: false))
+                    .frame(minWidth: 96)
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(host.colorScheme.statusBarColor)
-            
-            TerminalView(
-                paneId: pane.id,
-                colorScheme: host.colorScheme,
-                renderer: pane.renderer
-            )
-            .background(Color.black)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(host.colorScheme.borderColor, lineWidth: 2)
-        )
-        .padding(12)
     }
-    
-    private var loadingView: some View {
-        VStack(spacing: 20) {
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: .cyan))
-                .scaleEffect(1.2)
-            
-            Text("Initializing terminal...")
-                .foregroundColor(.gray)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    
+
     private var autocompleteToolbar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -113,16 +149,14 @@ struct TerminalSessionView: View {
                             Image(systemName: iconFor(suggestion))
                                 .font(.caption)
                             Text(suggestion)
-                                .font(.system(.caption, design: .monospaced))
+                                .font(.caption.monospaced())
                         }
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.15))
-                        .cornerRadius(8)
-                        .foregroundColor(.white)
+                        .padding(.vertical, 7)
                     }
+                    .buttonStyle(NeoLiquidButtonStyle(tint: accent, prominent: false))
                 }
-                
+
                 Button {
                     if let first = suggestions.first {
                         commandInput = first
@@ -131,52 +165,63 @@ struct TerminalSessionView: View {
                 } label: {
                     Image(systemName: "arrow.turn.down.left")
                         .font(.body)
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(Color.cyan)
-                        .cornerRadius(8)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                }
+                .buttonStyle(NeoLiquidButtonStyle(tint: accent))
+            }
+            .padding(.horizontal, 12)
+        }
+    }
+
+    private var historyToolbar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(commandHistory, id: \.self) { previous in
+                    Button {
+                        commandInput = previous
+                    } label: {
+                        Label(previous, systemImage: "clock.arrow.circlepath")
+                            .font(.caption.monospaced())
+                            .lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(NeoLiquidButtonStyle(tint: NeoLiquidPalette.auraRose, prominent: false))
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
         }
-        .frame(height: 44)
-        .background(.ultraThinMaterial)
     }
-    
+
     private var customKeyboardBar: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             keyButton("Esc", action: sendEscape)
             keyButton("Tab", action: sendTab)
-            
-            Spacer()
-            
+
             modifierButton("Ctrl", modifier: .control)
             modifierButton("Alt", modifier: .alt)
-            
-            Spacer()
-            
-            keyButton("←", action: { sendArrowKey(.left) })
-            keyButton("↑", action: { sendArrowKey(.up) })
-            keyButton("↓", action: { sendArrowKey(.down) })
-            keyButton("→", action: { sendArrowKey(.right) })
+
+            Spacer(minLength: 8)
+
+            keyButton("←") { sendArrowKey(.left) }
+            keyButton("↑") { sendArrowKey(.up) }
+            keyButton("↓") { sendArrowKey(.down) }
+            keyButton("→") { sendArrowKey(.right) }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(Color.black.opacity(0.9))
+        .padding(.horizontal, 12)
     }
-    
+
     private func keyButton(_ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 14, weight: .medium, design: .monospaced))
-                .foregroundColor(.white)
-                .frame(minWidth: 36, minHeight: 32)
-                .background(Color.white.opacity(0.15))
-                .cornerRadius(6)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .frame(minWidth: 34, minHeight: 30)
         }
+        .buttonStyle(NeoLiquidButtonStyle(tint: accent, prominent: false))
+        .fixedSize(horizontal: true, vertical: false)
     }
-    
+
     private func modifierButton(_ label: String, modifier: KeyModifier) -> some View {
         Button {
             if modifierState.contains(modifier) {
@@ -186,62 +231,69 @@ struct TerminalSessionView: View {
             }
         } label: {
             Text(label)
-                .font(.system(size: 14, weight: .medium, design: .monospaced))
-                .foregroundColor(modifierState.contains(modifier) ? .black : .white)
-                .frame(minWidth: 44, minHeight: 32)
-                .background(modifierState.contains(modifier) ? Color.cyan : Color.white.opacity(0.15))
-                .cornerRadius(6)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .frame(minWidth: 42, minHeight: 30)
         }
+        .buttonStyle(
+            NeoLiquidButtonStyle(
+                tint: modifierState.contains(modifier) ? NeoLiquidPalette.auraMint : accent,
+                prominent: modifierState.contains(modifier)
+            )
+        )
+        .fixedSize(horizontal: true, vertical: false)
     }
-    
+
     private var commandInputView: some View {
-        HStack(spacing: 12) {
-            TextField("Command...", text: $commandInput)
-                .font(.system(.body, design: .monospaced))
-                .foregroundColor(.white)
-                .focused($isInputFocused)
-                .onSubmit(sendCommand)
-                #if os(iOS)
-                .textInputAutocapitalization(.never)
-                #endif
-                .autocorrectionDisabled()
-            
-            Button {
-                toggleKeyboardBar()
-            } label: {
-                Image(systemName: showKeyboardBar ? "keyboard.chevron.compact.down" : "keyboard.chevron.compact.up")
-                    .foregroundColor(.gray)
+        NeoGlassCard(accent: accent, cornerRadius: 18, padding: 12) {
+            HStack(spacing: 10) {
+                TextField("Command...", text: $commandInput)
+                    .font(.system(.body, design: .monospaced))
+                    .focused($isInputFocused)
+                    .onSubmit(sendCommand)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .autocorrectionDisabled()
+                    .foregroundColor(NeoLiquidPalette.textPrimary)
+
+                Button {
+                    toggleKeyboardBar()
+                } label: {
+                    Image(systemName: showKeyboardBar ? "keyboard.chevron.compact.down" : "keyboard.chevron.compact.up")
+                        .font(.callout)
+                        .foregroundColor(NeoLiquidPalette.textSecondary)
+                }
+
+                Button {
+                    sendCommand()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(commandInput.isEmpty ? NeoLiquidPalette.textMuted : accent)
+                }
+                .disabled(commandInput.isEmpty)
             }
-            
-            Button {
-                sendCommand()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(commandInput.isEmpty ? .gray : .cyan)
-            }
-            .disabled(commandInput.isEmpty)
         }
-        .padding(14)
-        .background(Color.white.opacity(0.08))
-        .cornerRadius(14)
-        .padding(.horizontal)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
     }
-    
+
     private func sendCommand() {
         guard !commandInput.isEmpty else { return }
-        
-        var command = commandInput
-        
+
+        let originalCommand = commandInput
+        var commandToSend = originalCommand
+
         if modifierState.contains(.control) {
-            command = applyControlModifier(command)
+            commandToSend = applyControlModifier(commandToSend)
             modifierState.remove(.control)
         }
-        
+
+        rememberCommand(originalCommand)
+
         Task {
             do {
-                try await manager.send(hostId: host.id, command: command + "\n")
+                try await manager.send(hostId: host.id, command: commandToSend + "\n")
                 await MainActor.run {
                     commandInput = ""
                     suggestions = []
@@ -251,21 +303,38 @@ struct TerminalSessionView: View {
             }
         }
     }
-    
+
+    private func runMacro(_ macro: String) {
+        commandInput = macro
+        sendCommand()
+    }
+
+    private func rememberCommand(_ command: String) {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        commandHistory.removeAll { $0 == trimmed }
+        commandHistory.insert(trimmed, at: 0)
+
+        if commandHistory.count > 8 {
+            commandHistory = Array(commandHistory.prefix(8))
+        }
+    }
+
     private func sendEscape() {
         Task {
             try? await manager.send(hostId: host.id, command: "\u{1B}")
         }
     }
-    
+
     private func sendTab() {
         Task {
             try? await manager.send(hostId: host.id, command: "\t")
         }
     }
-    
+
     private enum ArrowDirection { case up, down, left, right }
-    
+
     private func sendArrowKey(_ direction: ArrowDirection) {
         let sequence: String
         switch direction {
@@ -274,41 +343,41 @@ struct TerminalSessionView: View {
         case .right: sequence = "\u{1B}[C"
         case .left: sequence = "\u{1B}[D"
         }
-        
+
         Task {
             try? await manager.send(hostId: host.id, command: sequence)
         }
     }
-    
+
     private func applyControlModifier(_ command: String) -> String {
         guard let firstChar = command.first else { return command }
-        
+
         let lower = firstChar.lowercased()
         guard let firstLower = lower.first,
               let ascii = firstLower.asciiValue,
               firstLower >= "a" && firstLower <= "z" else {
             return command
         }
-        
+
         let asciiVal = ascii - 96
         let controlChar = Character(UnicodeScalar(asciiVal))
         return String(controlChar) + command.dropFirst()
     }
-    
+
     private func toggleKeyboardBar() {
         withAnimation {
             showKeyboardBar.toggle()
         }
     }
-    
+
     private func updateSuggestions(for input: String) {
         guard !input.isEmpty else {
             suggestions = []
             return
         }
-        
+
         var newSuggestions: [String] = []
-        
+
         if !input.contains(" ") {
             let commands = [
                 "ls", "cd", "pwd", "cat", "grep", "find", "mkdir", "rm", "cp", "mv",
@@ -319,7 +388,7 @@ struct TerminalSessionView: View {
             ]
             newSuggestions = commands.filter { $0.hasPrefix(input.lowercased()) }
         }
-        
+
         if input.hasPrefix("git ") {
             let gitCommands = [
                 "git status", "git add .", "git add", "git commit -m \"",
@@ -328,7 +397,7 @@ struct TerminalSessionView: View {
             ]
             newSuggestions = gitCommands.filter { $0.hasPrefix(input) }
         }
-        
+
         if input.hasPrefix("tmux ") {
             let tmuxCommands = [
                 "tmux new-session", "tmux new-window", "tmux split-window",
@@ -337,12 +406,12 @@ struct TerminalSessionView: View {
             ]
             newSuggestions = tmuxCommands.filter { $0.hasPrefix(input) }
         }
-        
+
         if input.hasPrefix("cd ") {
             newSuggestions = ["cd ~", "cd ..", "cd ../..", "cd -", "cd /"]
                 .filter { $0.hasPrefix(input) }
         }
-        
+
         if input.hasPrefix("docker ") {
             let dockerCommands = [
                 "docker ps", "docker images", "docker run", "docker stop",
@@ -350,16 +419,17 @@ struct TerminalSessionView: View {
             ]
             newSuggestions = dockerCommands.filter { $0.hasPrefix(input) }
         }
-        
+
         suggestions = Array(newSuggestions.prefix(5))
     }
-    
+
     private func iconFor(_ suggestion: String) -> String {
         if suggestion.contains("/") { return "folder" }
         if suggestion.hasPrefix("git ") { return "arrow.triangle.branch" }
         if suggestion.hasPrefix("cd ") { return "arrow.right" }
         if suggestion.hasPrefix("docker") { return "cube" }
         if suggestion.hasPrefix("tmux") { return "rectangle.split.3x3" }
+        if suggestion.hasPrefix("pwd") { return "scope" }
         return "terminal"
     }
 }

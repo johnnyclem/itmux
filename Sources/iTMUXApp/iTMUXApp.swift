@@ -6,6 +6,7 @@ struct iTMUXApp: App {
     var body: some Scene {
         WindowGroup {
             SessionListView()
+                .preferredColorScheme(.dark)
         }
     }
 }

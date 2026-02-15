@@ -49,7 +49,10 @@ struct TerminalView: UIViewRepresentable {
             var actions: [UIMenuElement] = []
             
             let copyAction = UIAction(title: "Copy", image: UIImage(systemName: "doc.on.doc")) { _ in
-                UIPasteboard.general.string = textView.text(in: range)
+                let fullText = textView.text as NSString
+                let clipped = NSIntersectionRange(range, NSRange(location: 0, length: fullText.length))
+                guard clipped.length > 0 else { return }
+                UIPasteboard.general.string = fullText.substring(with: clipped)
             }
             actions.append(copyAction)
             
@@ -118,7 +121,7 @@ class TerminalTextView: UITextView {
     }
     
     @objc func copySelection() {
-        if let selectedText = selectedText {
+        if let selectedRange = selectedTextRange, let selectedText = text(in: selectedRange) {
             UIPasteboard.general.string = selectedText
         }
     }
@@ -128,7 +131,7 @@ class TerminalTextView: UITextView {
     }
     
     override func copy(_ sender: Any?) {
-        if let selectedText = selectedText {
+        if let selectedRange = selectedTextRange, let selectedText = text(in: selectedRange) {
             UIPasteboard.general.string = selectedText
         }
     }
@@ -316,7 +319,7 @@ struct TerminalView: NSViewRepresentable {
     func updateNSView(_ textView: NSTextView, context: Context) {
         Task {
             let rows = await renderer.getAllRows()
-            let cursor = await renderer.getCursor()
+            _ = await renderer.getCursor()
             
             await MainActor.run {
                 updateContent(textView: textView, rows: rows, colorScheme: colorScheme)

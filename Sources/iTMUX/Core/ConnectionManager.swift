@@ -1,4 +1,9 @@
 import Foundation
+import Security
+
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 public class ConnectionManager: ObservableObject {
@@ -233,15 +238,23 @@ public class ConnectionManager: ObservableObject {
         switch message {
         case .output(let paneId, let data):
             if panes[paneId] == nil {
-                panes[paneId] = PaneState(id: paneId)
+                for (id, var pane) in panes {
+                    pane.isActive = false
+                    panes[id] = pane
+                }
+
+                var pane = PaneState(id: paneId)
+                pane.isActive = true
+                panes[paneId] = pane
             }
             
-            if var paneState = panes[paneId] {
+            if let paneState = panes[paneId] {
                 _ = await paneState.renderer.process(data)
                 panes[paneId] = paneState
             }
             
             paneStates[hostId] = panes
+            updateConnectionState(hostId: hostId)
             await MainActor.run { objectWillChange.send() }
             
         case .layoutChange(let windowId, let layout):
@@ -292,11 +305,19 @@ public class ConnectionManager: ObservableObject {
             session.name = sessionName
             sessions[sessionId] = session
             sessionStates[hostId] = sessions
+
+            if panes.isEmpty {
+                var pane = PaneState(id: "%0")
+                pane.isActive = true
+                panes[pane.id] = pane
+                paneStates[hostId] = panes
+            }
             
             if var state = activeConnections[hostId] {
                 state.currentSession = sessionName
                 activeConnections[hostId] = state
             }
+            updateConnectionState(hostId: hostId)
             
         case .sessionClosed(let sessionId):
             sessions.removeValue(forKey: sessionId)
@@ -319,7 +340,7 @@ public class ConnectionManager: ObservableObject {
             }
             paneStates[hostId] = panes
             
-        case .paneSetClipboard(let paneId, let buffer):
+        case .paneSetClipboard(_, let buffer):
             if let buffer = buffer, let text = String(data: buffer, encoding: .utf8) {
                 #if os(iOS)
                 UIPasteboard.general.string = text

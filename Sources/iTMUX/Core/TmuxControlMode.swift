@@ -144,7 +144,7 @@ actor TmuxControlModeParser {
                 continue
             }
             
-            if let message = parseControlLine(line.trimmingCharacters(in: .whitespaces)) {
+            if let message = parseControlLine(line.trimmingCharacters(in: .newlines)) {
                 messages.append(message)
             }
         }
@@ -207,14 +207,73 @@ actor TmuxControlModeParser {
     }
     
     private func parseOutput(args: String) -> TmuxControlMessage {
-        let outputParts = args.split(separator: " ", maxSplits: 1)
-        guard outputParts.count == 2,
-              let paneId = outputParts.first.map(String.init),
-              let encodedData = outputParts.last.map(String.init),
-              let decodedData = Data(base64Encoded: encodedData.trimmingCharacters(in: .whitespaces)) else {
+        let outputParts = args.split(
+            separator: " ",
+            maxSplits: 1,
+            omittingEmptySubsequences: false
+        )
+        guard let paneIdToken = outputParts.first, !paneIdToken.isEmpty else {
             return .unknown("output \(args)")
         }
-        return .output(paneId: paneId, data: decodedData)
+
+        let paneId = String(paneIdToken)
+        let payload = outputParts.count > 1 ? String(outputParts[1]) : ""
+        return .output(paneId: paneId, data: decodeTmuxOutputPayload(payload))
+    }
+
+    // tmux control mode emits escaped bytes (e.g. \012, \\). Decode those into raw data.
+    private func decodeTmuxOutputPayload(_ payload: String) -> Data {
+        guard !payload.isEmpty else { return Data() }
+
+        let bytes = Array(payload.utf8)
+        var decoded: [UInt8] = []
+        decoded.reserveCapacity(bytes.count)
+
+        var index = 0
+        while index < bytes.count {
+            let byte = bytes[index]
+            if byte != 92 { // "\"
+                decoded.append(byte)
+                index += 1
+                continue
+            }
+
+            index += 1
+            guard index < bytes.count else {
+                decoded.append(92)
+                break
+            }
+
+            let next = bytes[index]
+            if (48...55).contains(next) {
+                var value = Int(next - 48)
+                var consumed = 1
+
+                while consumed < 3, index + consumed < bytes.count {
+                    let digit = bytes[index + consumed]
+                    guard (48...55).contains(digit) else { break }
+                    value = (value * 8) + Int(digit - 48)
+                    consumed += 1
+                }
+
+                decoded.append(UInt8(clamping: value))
+                index += consumed
+                continue
+            }
+
+            switch next {
+            case 110: decoded.append(10) // n
+            case 114: decoded.append(13) // r
+            case 116: decoded.append(9)  // t
+            case 92: decoded.append(92)  // \
+            default:
+                decoded.append(92)
+                decoded.append(next)
+            }
+            index += 1
+        }
+
+        return Data(decoded)
     }
     
     private func parseLayoutChange(args: String) -> TmuxControlMessage {

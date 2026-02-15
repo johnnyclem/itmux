@@ -3,32 +3,25 @@ import SwiftUI
 struct SessionConnectionView: View {
     let host: RemoteHost
     @ObservedObject var manager: ConnectionManager
-    
+
     @State private var password = ""
     @State private var passphrase = ""
     @State private var isConnecting = false
-    @State private var showPasswordInput = false
     @State private var errorMessage: String?
-    @State private var selectedKeyId: UUID?
     @FocusState private var focusPassword: Bool
-    @Environment(\.dismiss) private var dismiss
-    
+
     private var isConnected: Bool {
         manager.activeConnections[host.id]?.isConnected ?? false
     }
-    
+
+    private var accent: Color {
+        host.colorScheme.liquidAccent
+    }
+
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.08, green: 0.12, blue: 0.18),
-                    Color(red: 0.05, green: 0.08, blue: 0.12)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            
+            NeoLiquidBackground()
+
             if isConnected {
                 TerminalSessionView(host: host, manager: manager)
             } else {
@@ -38,19 +31,19 @@ struct SessionConnectionView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .liquidNavigationBackgroundHidden()
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(isConnected ? Color.green : Color.gray)
+                        .fill(isConnected ? Color.green : NeoLiquidPalette.textMuted)
                         .frame(width: 8, height: 8)
-                    
                     Text(host.displayName)
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(NeoLiquidPalette.textPrimary)
                 }
             }
-            
+
             if isConnected {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -63,90 +56,80 @@ struct SessionConnectionView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
-                            .foregroundColor(.gray)
+                            .foregroundColor(NeoLiquidPalette.textSecondary)
                     }
                 }
             }
         }
     }
-    
+
     private var connectionSetupView: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 hostInfoCard
-                
+
                 if host.useKeyAuth, let keyId = host.keyId {
                     keyAuthCard(keyId: keyId)
                 } else {
                     passwordAuthCard
                 }
-                
+
                 if let error = errorMessage {
                     errorCard(error)
                 }
-                
+
                 tipsCard
             }
             .padding()
+            .padding(.bottom, 20)
         }
     }
-    
+
     private var hostInfoCard: some View {
         ActionCard(
             title: host.displayName,
             subtitle: "\(host.username)@\(host.hostname):\(host.port)",
-            icon: "server.rack",
+            icon: host.colorScheme.glyphSymbol,
             colorScheme: host.colorScheme
         ) {
-            EmptyView()
+            HStack(spacing: 8) {
+                NeoTagPill(text: host.defaultSessionName, icon: "terminal", accent: accent)
+                NeoTagPill(text: host.useKeyAuth ? "Key Auth" : "Password", icon: host.useKeyAuth ? "key.fill" : "lock.fill", accent: accent.opacity(0.8))
+            }
         }
     }
-    
+
     private var passwordAuthCard: some View {
         ActionCard(
             title: "Authentication",
-            subtitle: host.useKeyAuth ? "SSH Key" : "Password",
+            subtitle: "Enter credentials to open the tmux session",
             icon: "lock.fill",
             colorScheme: host.colorScheme
         ) {
-            VStack(spacing: 16) {
+            VStack(spacing: 14) {
                 SecureField("Password", text: $password)
-                    .textFieldStyle(.plain)
-                    .padding(14)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(10)
-                    .foregroundColor(.white)
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     #endif
                     .autocorrectionDisabled()
                     .focused($focusPassword)
-                
-                if let error = errorMessage {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
-                
+                    .neoInputSurface(accent: accent)
+
                 Button {
                     connectWithPassword()
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
                         if isConnecting {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .tint(.white)
                         } else {
-                            Image(systemName: "arrow.right.circle.fill")
+                            Image(systemName: "bolt.horizontal.circle")
                             Text("Connect")
                         }
                     }
                     .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(14)
-                    .background(password.isEmpty || isConnecting ? Color.gray : Color.cyan)
-                    .cornerRadius(10)
                 }
+                .buttonStyle(NeoLiquidButtonStyle(tint: accent))
                 .disabled(password.isEmpty || isConnecting)
             }
         }
@@ -154,102 +137,91 @@ struct SessionConnectionView: View {
             focusPassword = true
         }
     }
-    
+
     private func keyAuthCard(keyId: UUID) -> some View {
         ActionCard(
             title: "SSH Key Authentication",
             subtitle: manager.sshKeys.first(where: { $0.id == keyId })?.name ?? "Unknown Key",
-            icon: "key.fill",
+            icon: "key.horizontal.fill",
             colorScheme: host.colorScheme
         ) {
-            VStack(spacing: 16) {
+            VStack(spacing: 14) {
                 if let key = manager.sshKeys.first(where: { $0.id == keyId }) {
-                    HStack {
-                        Image(systemName: "key.fill")
-                            .foregroundColor(.cyan)
-                        VStack(alignment: .leading) {
+                    HStack(spacing: 10) {
+                        NeoRoboGlyph(symbol: "key.fill", accent: accent, size: 32)
+                        VStack(alignment: .leading, spacing: 2) {
                             Text(key.name)
-                                .foregroundColor(.white)
-                            Text(String(key.publicKeyFingerprint.prefix(16)) + "...")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                                .foregroundColor(NeoLiquidPalette.textPrimary)
+                            Text(String(key.publicKeyFingerprint.prefix(22)) + "...")
+                                .font(.caption2.monospaced())
+                                .foregroundColor(NeoLiquidPalette.textMuted)
                         }
                         Spacer()
                         CheckmarkView()
                     }
                     .padding(12)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(8)
+                    .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                
+
                 SecureField("Passphrase (optional)", text: $passphrase)
-                    .textFieldStyle(.plain)
-                    .padding(14)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(10)
-                    .foregroundColor(.white)
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     #endif
                     .autocorrectionDisabled()
-                
+                    .neoInputSurface(accent: accent)
+
                 Button {
                     connectWithKey()
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
                         if isConnecting {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .tint(.white)
                         } else {
-                            Image(systemName: "arrow.right.circle.fill")
-                            Text("Connect")
+                            Image(systemName: "bolt.horizontal.circle")
+                            Text("Connect with Key")
                         }
                     }
                     .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(14)
-                    .background(isConnecting ? Color.gray : Color.cyan)
-                    .cornerRadius(10)
                 }
+                .buttonStyle(NeoLiquidButtonStyle(tint: accent))
                 .disabled(isConnecting)
             }
         }
     }
-    
+
     private func errorCard(_ message: String) -> some View {
-        HStack {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.red)
-            Text(message)
-                .font(.subheadline)
-                .foregroundColor(.red)
-            Spacer()
-        }
-        .padding()
-        .background(Color.red.opacity(0.1))
-        .cornerRadius(10)
-    }
-    
-    private var tipsCard: some View {
-        ActionCard(
-            title: "Requirements",
-            subtitle: nil,
-            icon: "info.circle.fill",
-            colorScheme: host.colorScheme
-        ) {
-            VStack(alignment: .leading, spacing: 10) {
-                TipRow(icon: "checkmark.circle", text: "tmux must be installed on remote host", color: .green)
-                TipRow(icon: "checkmark.circle", text: "SSH server must be running", color: .green)
-                TipRow(icon: "checkmark.circle", text: "Your password is never stored", color: .cyan)
+        NeoGlassCard(accent: NeoLiquidPalette.auraRose, cornerRadius: 20, padding: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(NeoLiquidPalette.auraRose)
+                Text(message)
+                    .font(.footnote)
+                    .foregroundColor(NeoLiquidPalette.textPrimary)
+                Spacer()
             }
         }
     }
-    
+
+    private var tipsCard: some View {
+        ActionCard(
+            title: "Connection Readiness",
+            subtitle: "Fast checklist before launch",
+            icon: "checkmark.shield",
+            colorScheme: host.colorScheme
+        ) {
+            VStack(alignment: .leading, spacing: 10) {
+                TipRow(icon: "checkmark.circle.fill", text: "tmux is installed on remote host", color: .green)
+                TipRow(icon: "checkmark.circle.fill", text: "SSH service is reachable", color: .green)
+                TipRow(icon: "checkmark.circle.fill", text: "Credentials are never persisted", color: accent)
+            }
+        }
+    }
+
     private func connectWithPassword() {
         isConnecting = true
         errorMessage = nil
-        
+
         Task {
             do {
                 try await manager.connect(
@@ -269,13 +241,13 @@ struct SessionConnectionView: View {
             }
         }
     }
-    
+
     private func connectWithKey() {
         guard let keyId = host.keyId else { return }
-        
+
         isConnecting = true
         errorMessage = nil
-        
+
         Task {
             do {
                 try await manager.connectWithKey(
@@ -300,7 +272,8 @@ struct SessionConnectionView: View {
 
 struct CheckmarkView: View {
     var body: some View {
-        Image(systemName: "checkmark.circle.fill")
+        Image(systemName: "checkmark.seal.fill")
+            .font(.title3)
             .foregroundColor(.green)
     }
 }

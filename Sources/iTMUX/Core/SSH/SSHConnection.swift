@@ -65,7 +65,7 @@ actor SSHConnection: SSHConnectionProtocol {
             throw SSHError.notConnected
         }
         
-        let response = "%session-changed $0 \(sessionName)\n%output %0 \n"
+        let response = "%session-changed $0 \(sessionName)\n%output %0 iTMUX connected to \(host) as \(username)\\015\\012\n"
         outputBuffer.append(Data(response.utf8))
         await processBuffer()
     }

@@ -186,6 +186,16 @@ open dist/iTMUX.app
 
 This launch path allows the GUI app to become the active first responder and receive keyboard input directly.
 
+### Running the Native iOS App
+
+Build and run the iOS app target from this package in Simulator:
+
+```bash
+xcodebuild -scheme iTMUXApp -destination 'platform=iOS Simulator,name=iPhone 17' -configuration Debug build
+```
+
+The iOS app uses a liquid glass visual system with animated, high-contrast controls optimized for fast terminal workflows.
+
 ### Testing with a Remote Host
 
 ```bash

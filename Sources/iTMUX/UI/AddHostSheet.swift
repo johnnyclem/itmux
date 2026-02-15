@@ -3,7 +3,7 @@ import SwiftUI
 struct AddHostSheet: View {
     @ObservedObject var manager: ConnectionManager
     @Environment(\.dismiss) private var dismiss
-    
+
     @State private var displayName = ""
     @State private var hostname = ""
     @State private var username = ""
@@ -12,116 +12,141 @@ struct AddHostSheet: View {
     @State private var selectedColorScheme: HostColorScheme = .ocean
     @State private var useKeyAuth = false
     @State private var selectedKeyId: UUID?
-    
+
+    private var selectedAccent: Color {
+        selectedColorScheme.liquidAccent
+    }
+
     private var isValid: Bool {
         !displayName.isEmpty && !hostname.isEmpty && !username.isEmpty && Int(port) != nil
     }
-    
+
     var body: some View {
         NavigationStack {
             ZStack {
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.08, green: 0.12, blue: 0.18),
-                        Color(red: 0.05, green: 0.08, blue: 0.12)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-                
+                NeoLiquidBackground()
+
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 16) {
+                        heroCard
                         hostDetailsCard
                         colorSchemeCard
                         authOptionsCard
                     }
                     .padding()
+                    .padding(.bottom, 18)
                 }
             }
             .navigationTitle("Add Host")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
+            .liquidNavigationBackgroundHidden()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(.gray)
+                    .foregroundColor(NeoLiquidPalette.textSecondary)
                 }
-                
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
                         addHost()
                     }
-                    .foregroundColor(.cyan)
+                    .foregroundColor(selectedAccent)
                     .disabled(!isValid)
                 }
             }
         }
     }
-    
+
+    private var heroCard: some View {
+        NeoGlassCard(accent: selectedAccent, cornerRadius: 26, padding: 18) {
+            HStack(spacing: 12) {
+                NeoRoboGlyph(symbol: selectedColorScheme.glyphSymbol, accent: selectedAccent, size: 48)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Neo-Rig Manifest")
+                        .font(.headline)
+                        .foregroundColor(NeoLiquidPalette.textPrimary)
+                    Text("Define host identity, intent, and connection ritual.")
+                        .font(.caption)
+                        .foregroundColor(NeoLiquidPalette.textSecondary)
+                }
+                Spacer()
+            }
+        }
+    }
+
     private var hostDetailsCard: some View {
         ActionCard(
             title: "Host Details",
-            subtitle: "Configure your remote server",
+            subtitle: "Create a production-grade endpoint profile",
             icon: "server.rack",
             colorScheme: selectedColorScheme
         ) {
-            VStack(spacing: 14) {
+            VStack(spacing: 12) {
                 InputField(
                     icon: "tag.fill",
-                    placeholder: "Display Name (e.g., MacBook Pro)",
-                    text: $displayName
+                    placeholder: "Display Name (e.g., Primary Cluster)",
+                    text: $displayName,
+                    accent: selectedAccent
                 )
-                
+
                 InputField(
-                    icon: "globe",
+                    icon: "network",
                     placeholder: "Hostname (e.g., 192.168.1.100)",
                     text: $hostname,
                     autocapitalization: false,
-                    keyboardType: .URL
+                    keyboardType: .URL,
+                    accent: selectedAccent
                 )
-                
+
                 InputField(
                     icon: "person.fill",
                     placeholder: "Username",
                     text: $username,
-                    autocapitalization: false
+                    autocapitalization: false,
+                    accent: selectedAccent
                 )
-                
-                HStack(spacing: 12) {
+
+                HStack(spacing: 10) {
                     InputField(
-                        icon: "network",
+                        icon: "number",
                         placeholder: "Port",
                         text: $port,
-                        keyboardType: .numberPad
+                        keyboardType: .numberPad,
+                        accent: selectedAccent
                     )
-                    
+
                     InputField(
-                        icon: "terminal",
+                        icon: "terminal.fill",
                         placeholder: "Session",
                         text: $sessionName,
-                        autocapitalization: false
+                        autocapitalization: false,
+                        accent: selectedAccent
                     )
                 }
             }
         }
     }
-    
+
     private var colorSchemeCard: some View {
         ActionCard(
-            title: "Color Theme",
-            subtitle: "Choose a color to identify this host",
-            icon: "paintpalette.fill",
+            title: "Color Vessel",
+            subtitle: "Tune the host aura and glyph identity",
+            icon: "swatchpalette",
             colorScheme: selectedColorScheme
         ) {
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 12) {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ],
+                spacing: 12
+            ) {
                 ForEach(HostColorScheme.allCases, id: \.self) { scheme in
                     ColorSchemeButton(
                         scheme: scheme,
@@ -133,38 +158,37 @@ struct AddHostSheet: View {
             }
         }
     }
-    
+
     private var authOptionsCard: some View {
         ActionCard(
             title: "Authentication",
-            subtitle: "Choose how to authenticate",
-            icon: "key.fill",
+            subtitle: "Choose your trust handshake",
+            icon: "key.horizontal.fill",
             colorScheme: selectedColorScheme
         ) {
             VStack(spacing: 14) {
                 Toggle(isOn: $useKeyAuth) {
-                    HStack {
-                        Image(systemName: "key.fill")
-                            .foregroundColor(.cyan)
-                        Text("Use SSH Key")
-                            .foregroundColor(.white)
+                    HStack(spacing: 10) {
+                        Image(systemName: useKeyAuth ? "key.fill" : "lock.fill")
+                            .foregroundColor(selectedAccent)
+                        Text(useKeyAuth ? "SSH Key Mode" : "Password Mode")
+                            .foregroundColor(NeoLiquidPalette.textPrimary)
                     }
                 }
-                .toggleStyle(SwitchToggleStyle(tint: .cyan))
-                
+                .toggleStyle(SwitchToggleStyle(tint: selectedAccent))
+
                 if useKeyAuth {
                     if manager.sshKeys.isEmpty {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundColor(.orange)
-                            Text("No SSH keys configured")
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(NeoLiquidPalette.auraAmber)
+                            Text("No SSH keys configured yet.")
                                 .font(.caption)
-                                .foregroundColor(.gray)
+                                .foregroundColor(NeoLiquidPalette.textSecondary)
                             Spacer()
                         }
                         .padding(12)
-                        .background(Color.orange.opacity(0.1))
-                        .cornerRadius(8)
+                        .background(Color.orange.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     } else {
                         Picker("Select Key", selection: $selectedKeyId) {
                             Text("Select a key").tag(nil as UUID?)
@@ -173,16 +197,13 @@ struct AddHostSheet: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        .foregroundColor(.white)
-                        .padding(12)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(8)
+                        .neoInputSurface(accent: selectedAccent)
                     }
                 }
             }
         }
     }
-    
+
     private func addHost() {
         let host = RemoteHost(
             displayName: displayName,
@@ -194,7 +215,7 @@ struct AddHostSheet: View {
             useKeyAuth: useKeyAuth,
             keyId: selectedKeyId
         )
-        
+
         manager.addHost(host)
         dismiss()
     }
@@ -206,28 +227,26 @@ struct InputField: View {
     @Binding var text: String
     var autocapitalization: Bool = true
     var keyboardType: KeyboardType = .default
-    
+    var accent: Color = NeoLiquidPalette.auraCyan
+
     enum KeyboardType {
         case `default`, URL, numberPad
     }
-    
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundColor(.gray)
+                .foregroundColor(accent)
                 .frame(width: 20)
-            
+
             TextField(placeholder, text: $text)
-                .foregroundColor(.white)
                 #if os(iOS)
                 .textInputAutocapitalization(autocapitalization ? .sentences : .never)
                 .keyboardType(keyboardType == .URL ? .URL : (keyboardType == .numberPad ? .numberPad : .default))
                 #endif
                 .autocorrectionDisabled()
         }
-        .padding(14)
-        .background(Color.white.opacity(0.08))
-        .cornerRadius(10)
+        .neoInputSurface(accent: accent)
     }
 }
 
@@ -235,23 +254,29 @@ struct ColorSchemeButton: View {
     let scheme: HostColorScheme
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                Circle()
-                    .fill(scheme.statusBarColor)
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Circle()
-                            .strokeBorder(Color.white, lineWidth: isSelected ? 3 : 0)
-                    )
-                
+                ZStack {
+                    Circle()
+                        .fill(scheme.liquidAccent.opacity(0.22))
+                        .frame(width: 48, height: 48)
+                    NeoRoboGlyph(symbol: scheme.glyphSymbol, accent: scheme.liquidAccent, size: 40)
+                }
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(isSelected ? 0.95 : 0), lineWidth: 2)
+                        .frame(width: 48, height: 48)
+                )
+
                 Text(scheme.displayName)
-                    .font(.caption2)
-                    .foregroundColor(isSelected ? .white : .gray)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(isSelected ? NeoLiquidPalette.textPrimary : NeoLiquidPalette.textMuted)
             }
+            .padding(.vertical, 6)
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -259,16 +284,16 @@ struct TipRow: View {
     let icon: String
     let text: String
     var color: Color = .green
-    
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.caption)
                 .foregroundColor(color)
-            
             Text(text)
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(NeoLiquidPalette.textSecondary)
+            Spacer()
         }
     }
 }
@@ -279,40 +304,20 @@ struct ActionCard<Content: View>: View {
     let icon: String
     let colorScheme: HostColorScheme
     @ViewBuilder let content: Content
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundColor(colorScheme.statusBarColor)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    if let subtitle = subtitle {
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                }
-                
-                Spacer()
-            }
-            
-            content
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color.white.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(colorScheme.borderColor.opacity(0.5), lineWidth: 1)
+        NeoGlassCard(accent: colorScheme.liquidAccent, cornerRadius: 22, padding: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                NeoSectionTitle(
+                    title: title,
+                    subtitle: subtitle ?? "",
+                    symbol: icon,
+                    accent: colorScheme.liquidAccent
                 )
-        )
+
+                content
+            }
+        }
     }
 }
 
