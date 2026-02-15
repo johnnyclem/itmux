@@ -11,18 +11,30 @@ let package = Package(
         .library(
             name: "iTMUX",
             targets: ["iTMUX"]),
+        .executable(
+            name: "iTMUXApp",
+            targets: ["iTMUXApp"])
     ],
     dependencies: [
-        .package(url: "https://github.com/Frugghi/NMSSH.git", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
     ],
     targets: [
         .target(
             name: "iTMUX",
             dependencies: [
-                // Link against NMSSH product provided by the dependency
-                .product(name: "NMSSH", package: "NMSSH")
+                .product(name: "Crypto", package: "swift-crypto"),
             ],
-            path: "Sources"
+            path: "Sources/iTMUX"
+        ),
+        .executableTarget(
+            name: "iTMUXApp",
+            dependencies: ["iTMUX"],
+            path: "Sources/iTMUXApp"
+        ),
+        .testTarget(
+            name: "iTMUXTests",
+            dependencies: ["iTMUX"],
+            path: "Tests/iTMUXTests"
         )
     ]
 )
