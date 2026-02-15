@@ -172,7 +172,7 @@ Note: You may need to swap for NMSSH if SwiftSSH has issues. Both are specified 
 
 ```bash
 swift build
-swift test
+swift test --build-system xcode
 ```
 
 ### Building a Standalone macOS App Bundle
@@ -188,13 +188,26 @@ This launch path allows the GUI app to become the active first responder and rec
 
 ### Running the Native iOS App
 
-Build and run the iOS app target from this package in Simulator:
+Open the dedicated iOS client project:
 
 ```bash
-xcodebuild -scheme iTMUXApp -destination 'platform=iOS Simulator,name=iPhone 17' -configuration Debug build
+open iOSClient/iTMUXiOSClient.xcodeproj
+```
+
+Or build it directly for Simulator:
+
+```bash
+xcodebuild -project iOSClient/iTMUXiOSClient.xcodeproj -scheme iTMUXiOSClient -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.1' -configuration Debug build
 ```
 
 The iOS app uses a liquid glass visual system with animated, high-contrast controls optimized for fast terminal workflows.
+
+If you edit `iOSClient/project.yml`, regenerate the Xcode project with:
+
+```bash
+cd iOSClient
+xcodegen generate
+```
 
 ### Testing with a Remote Host
 
